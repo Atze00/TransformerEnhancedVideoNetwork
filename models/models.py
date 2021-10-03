@@ -4,6 +4,7 @@ from x_transformers_mod import ContinuousTransformerWrapper
 from movinets import MoViNet
 from movinets.config import _C
 from movinets.models import CausalModule
+import types
 
 def _forward_impl(self, x):
     x = self.conv1(x)
@@ -11,8 +12,6 @@ def _forward_impl(self, x):
     x = self.conv7(x)
     x = nn.AdaptiveAvgPool3d((x.shape[2],1,1))(x).squeeze(-1).squeeze(-1)
     return x
-
-MoViNet._forward_impl = _forward_impl
 
 MODELS = {
         "A0": _C.MODEL.MoViNetA0,
@@ -32,6 +31,31 @@ DIM_IN = {
         "A5": 992,
 }
 
+class FeedForward(nn.Module):
+        def __init__(self,
+                    dim,
+                    dim_out,
+                    mult = 4,
+                    dropout = 0.,
+                    zero_init_output = False
+                    ):
+            super().__init__()
+            inner_dim = int(dim * mult)
+            dim_out = dim_out
+            project_in = nn.Sequential(
+                    nn.Linear(dim, inner_dim),
+                    nn.GELU()
+                    )
+            self.net = nn.Sequential(
+                    project_in,
+                    nn.Dropout(dropout),
+                    nn.Linear(inner_dim, dim_out)
+                    )
+            # init last linear layer to 0
+            if zero_init_output:
+                init_zero_(self.net[-1])
+        def forward(self, x):
+            return self.net(x)
 
 class EnhancedVideoNetwork(CausalModule):
     def __init__(self, *, 
@@ -44,14 +68,15 @@ class EnhancedVideoNetwork(CausalModule):
                  dim_att,
                  depth,
                  heads,
+                 dropout_mlp,
                  rotary_pos_emb
                 ):
         super().__init__()
         self.backbone = MoViNet( MODELS[model_name], causal = causal, pretrained = pretrained)
+        self.backbone._forward_impl = types.MethodType(_forward_impl,self.backbone)
         dim_in = DIM_IN[model_name]
         self.transformer = ContinuousTransformerWrapper(
             dim_in = dim_in,
-            dim_out = dim_out,
             max_seq_len = max_seq_len,
             max_mem_len = max_mem_len,
             attn_layers = AttentionLayers(
@@ -62,10 +87,13 @@ class EnhancedVideoNetwork(CausalModule):
                 rotary_pos_emb = rotary_pos_emb
             )
         )
+        self.ff = FeedForward(dim_att,dim_out)
     def forward(self, x):
         x = self.backbone(x).permute(0,2,1)
         x, mems = self.transformer(x, mems = self.activation, return_mems = True)
         self.activation = mems
+        x = self.ff(x[:,-1])
+
         return x
     
     @staticmethod
@@ -75,3 +103,7 @@ class EnhancedVideoNetwork(CausalModule):
 
     def clean_activation_buffers(self) -> None:
         self.apply(self._clean_activation_buffers)
+
+
+
+
