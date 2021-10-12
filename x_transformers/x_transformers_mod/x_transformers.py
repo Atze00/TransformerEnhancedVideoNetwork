@@ -368,6 +368,7 @@ class Attention(nn.Module):
         dim_head = DEFAULT_DIM_HEAD,
         heads = 8,
         causal = False,
+        att_len = None,
         mask = None,
         talking_heads = False,
         collab_heads = False,
@@ -385,6 +386,10 @@ class Attention(nn.Module):
         self.heads = heads
         self.causal = causal
         self.mask = mask
+        self.att_len = att_len
+
+        if (att_len is not None) and (att_len < 0):
+            raise ValueError("att_len must be an integer bigger than zero")
 
         qk_dim = v_dim = dim_head * heads
 
@@ -516,14 +521,21 @@ class Attention(nn.Module):
             dots.masked_fill_(~input_mask, mask_value)
             del input_mask
 
+
+
         if self.causal:
             i, j = dots.shape[-2:]
             r = torch.arange(i, device = device)
-            mask = rearrange(r, 'i -> () () i ()') < rearrange(r, 'j -> () () () j')
-            mask = F.pad(mask, (j - i, 0), value = False)
+            distance = rearrange(r, 'j -> () () () j') - rearrange(r, 'i -> () () i ()')
+            mask = distance > 0
+            if self.att_len:
+                mask_2 = distance < self.att_len
+                mask = torch.logical_and(mask, mask_2)
+                del mask_2
+            mask = F.pad(mask, (j - i, 0), value = 0)
             dots.masked_fill_(mask, mask_value)
             del mask
-
+        
         if exists(self.sparse_topk) and self.sparse_topk < dots.shape[-1]:
             top, _ = dots.topk(self.sparse_topk, dim = -1)
             vk = top[..., -1].unsqueeze(-1).expand_as(dots)
