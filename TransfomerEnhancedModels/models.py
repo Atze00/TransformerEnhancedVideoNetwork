@@ -62,6 +62,7 @@ class EnhancedVideoNetwork(CausalModule):
                  mult_mlp,
                  dim_out,
                  max_seq_len,
+                 att_len,
                  max_mem_len,
                  dim_att,
                  depth,
@@ -72,6 +73,7 @@ class EnhancedVideoNetwork(CausalModule):
                 ):
         super().__init__()
         self.backbone = MoViNet( MODELS[model_name], causal = causal, pretrained = pretrained)
+        self.backbone.classifier = nn.Identity()
         self.backbone._forward_impl = types.MethodType(_forward_impl,self.backbone)
         dim_in = DIM_IN[model_name]
         self.transformer = ContinuousTransformerWrapper(
@@ -81,12 +83,15 @@ class EnhancedVideoNetwork(CausalModule):
             attn_layers = AttentionLayers(
                 causal = causal,
                 dim = dim_att,
+                att_len = att_len,
                 depth = depth,
                 heads = heads,
-                alibi_pos_bias =  alibi_pos_bias 
+                alibi_pos_bias =  alibi_pos_bias, 
+                ff_mult=2,
             )
         )
         self.ff = FeedForward(dim_att,dim_out,mult_mlp,dropout_mlp)
+
     def forward(self, x):
         x = self.backbone(x).permute(0,2,1)
         x, mems = self.transformer(x, mems = self.activation, return_mems = True)
