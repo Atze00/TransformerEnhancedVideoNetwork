@@ -521,18 +521,20 @@ class Attention(nn.Module):
             dots.masked_fill_(~input_mask, mask_value)
             del input_mask
 
-
+        if exists(self.att_len):
+            i, j = dots.shape[-2:]
+            range_q = torch.arange(j - i, j, device = device)
+            range_k = torch.arange(j, device = device)
+            dist = rearrange(range_q, 'i -> () () i ()') - rearrange(range_k, 'j -> () () () j')
+            mask = dist > self.att_len
+            dots.masked_fill_(mask, mask_value)
+            del mask
 
         if self.causal:
             i, j = dots.shape[-2:]
             r = torch.arange(i, device = device)
-            distance = rearrange(r, 'j -> () () () j') - rearrange(r, 'i -> () () i ()')
-            mask = distance > 0
-            if self.att_len:
-                mask_2 = distance < self.att_len
-                mask = torch.logical_and(mask, mask_2)
-                del mask_2
-            mask = F.pad(mask, (j - i, 0), value = 0)
+            mask = rearrange(r, 'i -> () () i ()') < rearrange(r, 'j -> () () () j')
+            mask = F.pad(mask, (j - i, 0), value = False)
             dots.masked_fill_(mask, mask_value)
             del mask
         
