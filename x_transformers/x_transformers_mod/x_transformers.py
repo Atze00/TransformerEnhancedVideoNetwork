@@ -178,8 +178,8 @@ class AlibiPositionalBias(nn.Module):
         self.heads = heads
         slopes = torch.Tensor(self._get_slopes(heads))
         slopes = rearrange(slopes, 'h -> () h () ()')
-        self.register_buffer('slopes', slopes)
-        self.register_buffer('bias', None)
+        self.register_buffer('slopes', slopes, persistent = False)
+        self.register_buffer('bias', None, persistent = False)
 
     @staticmethod
     def _get_slopes(heads):
@@ -202,7 +202,7 @@ class AlibiPositionalBias(nn.Module):
 
         bias = torch.arange(j, device = device)
         bias = rearrange(bias, 'j -> () () () j')
-        self.register_buffer('bias', bias * self.slopes)
+        self.register_buffer('bias', bias * self.slopes, persistent = False)
         return qk_dots + self.bias
 
 
