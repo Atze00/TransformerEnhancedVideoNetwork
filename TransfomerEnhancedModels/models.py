@@ -83,7 +83,7 @@ class EnhancedVideoNetwork(CausalModule):
             attn_layers = AttentionLayers(
                 causal = causal,
                 dim = dim_att,
-                att_len = att_len,
+                attn_att_len = att_len,
                 depth = depth,
                 heads = heads,
                 alibi_pos_bias =  alibi_pos_bias, 

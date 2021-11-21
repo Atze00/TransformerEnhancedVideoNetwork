@@ -520,7 +520,7 @@ class Attention(nn.Module):
         if exists(input_mask):
             dots.masked_fill_(~input_mask, mask_value)
             del input_mask
-
+            
         if exists(self.att_len):
             i, j = dots.shape[-2:]
             range_q = torch.arange(j - i, j, device = device)
@@ -534,7 +534,7 @@ class Attention(nn.Module):
             i, j = dots.shape[-2:]
             r = torch.arange(i, device = device)
             mask = rearrange(r, 'i -> () () i ()') < rearrange(r, 'j -> () () () j')
-            mask = F.pad(mask, (j - i, 0), value = False)
+            mask = F.pad(mask, (j - i, 0), value = 0)
             dots.masked_fill_(mask, mask_value)
             del mask
         
