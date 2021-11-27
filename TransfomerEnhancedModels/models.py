@@ -88,7 +88,9 @@ class EnhancedVideoNetwork(CausalModule):
                 heads = heads,
                 alibi_pos_bias =  alibi_pos_bias, 
                 ff_mult=2,
-            )
+                pre_norm=False
+            ),
+            use_pos_emb=False
         )
         self.ff = FeedForward(dim_att,dim_out,mult_mlp,dropout_mlp)
 
